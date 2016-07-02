@@ -53,6 +53,8 @@ main = do
     setCursorPosition 0 0
     forM_ screenLines putStrLn
   hSetEcho stdout False
+
+  hSetBuffering stdin NoBuffering
   forever $ do
     -- TODO filter escape sequences
     -- At least "ESC[A" etc for arrow keys
