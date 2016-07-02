@@ -26,6 +26,8 @@ executable simple-exe
   build-depends:       base
                      , simple
                      , lubeck-frp
+                      -- for Lubeck.Forms
+                    --  , lubeck-web
                      , ansi-terminal
                      , base-prelude
                      , linear
