@@ -150,28 +150,25 @@ renderVal
     -> FRP (Signal Screen)
 renderVal x e = do
   (u,e2) <- newEvent
-  r <- renderVal2 x e e2
+  r <- renderVal2 False x e e2
   sendTo u ()
   pure (fst r)
 
 
 
--- TODO prevent going where you're not supposed to (i.e. messing up selection state)
-  -- OK avoid moving left when on top node
-  -- OK avoid moving right into a finite node
-  -- OK avoid moving right on a collapsed node
 -- TODO coloured output for selection
 -- TODO only render innermost selection (so use a version of curKey that looks at Local only, not Nested)
 -- TODO wrap Scren type + add basic local origin/enveloped composition operators (beside, above, etc)
 -- TODO function to render a screen to a [[Char]] matrix of a specified with, padding with whitespace
 
 renderVal2
-    :: Value
+    :: Bool -- Allow moving left (i.e. not true for top node)
+    -> Value
     -> Events Action
     -> Events () -- accept selection
     -> FRP (Signal Screen, Future ())
-renderVal2 (Str x) ev _   = pure $ (pure [x], fmap (const ()) $ Lubeck.FRP.filter (== MoveRight) ev)
-renderVal2 (Val theValueMap) ev acc = do
+renderVal2 allowLeftMove (Str x) ev _   = pure $ (pure [x], fmap (const ()) $ Lubeck.FRP.filter (== MoveRight) ev)
+renderVal2 allowLeftMove (Val theValueMap) ev acc = do
 
   -- TODO partial iso between strings and keys here
 
@@ -212,7 +209,7 @@ renderVal2 (Val theValueMap) ev acc = do
               let evAs :: Events () = foo2 k
               -- subscribeEvent evs $ Sink $ \x -> putStr "evs: " >> putStr k >> putStr " " >> print x
               -- subscribeEvent ev  $ Sink $ \x -> putStr "ev : " >> putStr k >> putStr " " >> print x
-              (view, deactF) <- renderVal2 nestedVal evs evAs
+              (view, deactF) <- renderVal2 True nestedVal evs evAs
               let toggleCmd = case tc of
                       Open -> \k v -> Map.insert k v
                       Close -> \k v -> Map.delete k
@@ -248,9 +245,13 @@ renderVal2 (Val theValueMap) ev acc = do
       case s of
         Outside -> return ()
         Nested n -> sendTo currentSubCompS e
-        Local n -> do
-          sendTo selU (const $ Outside)
-          sendTo tellSuperComp ()
+        Local n ->
+          if not allowLeftMove
+          then
+            return ()
+          else do
+            sendTo selU (const $ Outside)
+            sendTo tellSuperComp ()
     MoveRight -> do
       s <- pollBehavior $ current selS
       case s of
@@ -258,12 +259,12 @@ renderVal2 (Val theValueMap) ev acc = do
         Nested n -> sendTo currentSubCompS e
         Local n ->
           if not $ canMoveIntoItem n
-            then
-                return ()
-            else do
-              doWithSelected Open n
-              sendTo selU (const $ Nested n)
-              sendTo tellSubCompN n
+          then
+              return ()
+          else do
+            doWithSelected Open n
+            sendTo selU (const $ Nested n)
+            sendTo tellSubCompN n
     ToggleSelected -> do
       s <- pollBehavior $ current selS
       case s of
