@@ -40,7 +40,7 @@ packages:
 - '.'
 - location:
     git: git@github.com:BeautifulDestinations/lubeck.git
-    commit: 7a4305a023655a62e98bd3768ddf16ffeb904769
+    commit: c3e2e0103ec416e96a8273107bd396da0d7c960a
 # - location: '../../lubeck'
   subdirs:
   - lubeck-core
