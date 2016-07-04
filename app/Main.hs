@@ -129,6 +129,9 @@ Internally/for recursive call we need slightly more:
 data Sel = Outside | Local Int | Nested Int
   deriving (Eq, Ord, Show)
 
+data ToggleCommand = Open | Close | Toggle
+  deriving (Eq, Ord, Show)
+
 main' :: Events Key -> FRP (Signal Screen)
 main' e = do
   renderVal exValue2 (filterJust $ fmap g e)
@@ -154,9 +157,9 @@ renderVal x e = do
 
 
 -- TODO prevent going where you're not supposed to (i.e. messing up selection state)
-  -- avoid moving left when on top node
-  -- avoid moving right on a finite node
-  -- avoid moving right on a collapsed node
+  -- OK avoid moving left when on top node
+  -- OK avoid moving right into a finite node
+  -- OK avoid moving right on a collapsed node
 -- TODO coloured output for selection
 -- TODO only render innermost selection (so use a version of curKey that looks at Local only, not Nested)
 -- TODO wrap Scren type + add basic local origin/enveloped composition operators (beside, above, etc)
@@ -200,6 +203,26 @@ renderVal2 (Val theValueMap) ev acc = do
 
   (tellSuperComp :: Sink (), superCompTold :: Future ()) <- newEvent
 
+  let doWithSelected :: ToggleCommand -> Int -> IO () = \tc n -> do
+          let k = safeIndex (Map.keys theValueMap) n
+          case Map.lookup k theValueMap of
+            Nothing -> error "Impossible"
+            Just nestedVal -> do
+              let evs :: Events Action = foo1 k
+              let evAs :: Events () = foo2 k
+              -- subscribeEvent evs $ Sink $ \x -> putStr "evs: " >> putStr k >> putStr " " >> print x
+              -- subscribeEvent ev  $ Sink $ \x -> putStr "ev : " >> putStr k >> putStr " " >> print x
+              (view, deactF) <- renderVal2 nestedVal evs evAs
+              let toggleCmd = case tc of
+                      Open -> \k v -> Map.insert k v
+                      Close -> \k v -> Map.delete k
+                      Toggle -> \k v -> mapToggle k v
+              sendTo subCompsU (toggleCmd k (view, deactF))
+
+  let canMoveIntoItem :: Int -> Bool = \n -> case Map.lookup (safeIndex (Map.keys theValueMap) n) theValueMap of
+            Just (Val _) -> True
+            _            -> False
+
   subscribeEvent acc $ Sink $ \e -> do
     sendTo selU $ const $ Local 0
   subscribeEvent subCompToldUs $ Sink $ \e -> do
@@ -233,25 +256,21 @@ renderVal2 (Val theValueMap) ev acc = do
       case s of
         Outside -> return ()
         Nested n -> sendTo currentSubCompS e
-        Local n -> do
-          sendTo selU (const $ Nested n)
-          sendTo tellSubCompN n
+        Local n ->
+          if not $ canMoveIntoItem n
+            then
+                return ()
+            else do
+              doWithSelected Open n
+              sendTo selU (const $ Nested n)
+              sendTo tellSubCompN n
     ToggleSelected -> do
       s <- pollBehavior $ current selS
       case s of
         Outside -> return ()
         Nested n -> sendTo currentSubCompS e
-        Local n -> do
-          let k = safeIndex (Map.keys theValueMap) n
-          case Map.lookup k theValueMap of
-            Nothing -> error "Impossible"
-            Just nestedVal -> do
-              let evs :: Events Action = foo1 k
-              let evAs :: Events () = foo2 k
-              -- subscribeEvent evs $ Sink $ \x -> putStr "evs: " >> putStr k >> putStr " " >> print x
-              -- subscribeEvent ev  $ Sink $ \x -> putStr "ev : " >> putStr k >> putStr " " >> print x
-              (view, deactF) <- renderVal2 nestedVal evs evAs
-              sendTo subCompsU (mapToggle k (view, deactF))
+        Local n -> doWithSelected Toggle n
+
 
   -- TODO we also need to render our own keys and selection...
   let foo2 :: Signal Screen = do
