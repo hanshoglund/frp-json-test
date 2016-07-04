@@ -180,6 +180,9 @@ renderVal2 allowLeftMove (Val theValueMap) ev acc = do
         Local n -> Just $ safeIndex (Map.keys theValueMap) n
         Nested n -> Just $ safeIndex (Map.keys theValueMap) n
         _ -> Nothing
+  let curLocalKey :: Signal (Maybe String) = flip fmap selS  $ \s -> case s of
+        Local n -> Just $ safeIndex (Map.keys theValueMap) n
+        _ -> Nothing
 
 
   -- NOTE this would be redunant if we actually removed subcomponents from map below
@@ -277,9 +280,9 @@ renderVal2 allowLeftMove (Val theValueMap) ev acc = do
   let foo2 :: Signal Screen = do
         r :: Map String (Signal Screen) <- fmap (\m -> Map.map fst m) $ subCompsS
         s :: Sel <- selS
-        curKey :: Maybe String <- curKey
+        curKey' :: Maybe String <- curLocalKey
         let footer :: Signal Screen = mempty -- pure [show s]
-        mconcat $ Map.foldrWithKey (renderKeyWithValue curKey) [footer] $ useKeys theValueMap r -- TODO use useKeys
+        mconcat $ Map.foldrWithKey (renderKeyWithValue curKey') [footer] $ useKeys theValueMap r -- TODO use useKeys
   pure (foo2, superCompTold)
   where
     renderKeyWithValue :: Maybe String -> String -> Maybe (Signal Screen) -> [Signal Screen] -> [Signal Screen]
@@ -296,7 +299,7 @@ renderVal2 allowLeftMove (Val theValueMap) ev acc = do
     mapToggle k v m = Map.alter g k m where
       g Nothing  = Just v
       g (Just _) = Nothing
-    safeIndex xs n = cycle xs !! abs n
+    safeIndex xs n = xs !! (n `mod` length xs)
 
 -- renderVal :: Value -> Events Action -> FRP (Signal Screen)
 -- renderVal (Str x) _  = pure $ pure $ [x]
