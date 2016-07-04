@@ -96,6 +96,8 @@ data Value = Val (Map String Value) | Str String
 exValue :: Value
 exValue = Val (Map.fromList [("fin", Str "x"),("inf",exValue)])
 
+exValue2 = Val (Map.fromList [("a",exValue2),("b", Str "x"),("c",exValue2)])
+
 exValueFin = Val (Map.fromList [("fin", Str "x"),("fin2",Str "y")])
 
 
@@ -129,7 +131,7 @@ data Sel = Outside | Local Int | Nested Int
 
 main' :: Events Key -> FRP (Signal Screen)
 main' e = do
-  renderVal exValue (filterJust $ fmap g e)
+  renderVal exValue2 (filterJust $ fmap g e)
   where
     g (LetterKey '\r') = Just ToggleSelected
     g (LetterKey ' ') = Just ToggleSelected
@@ -152,6 +154,9 @@ renderVal x e = do
 
 
 -- TODO prevent going where you're not supposed to (i.e. messing up selection state)
+  -- avoid moving left when on top node
+  -- avoid moving right on a finite node
+  -- avoid moving right on a collapsed node
 -- TODO coloured output for selection
 -- TODO only render innermost selection (so use a version of curKey that looks at Local only, not Nested)
 -- TODO wrap Scren type + add basic local origin/enveloped composition operators (beside, above, etc)
