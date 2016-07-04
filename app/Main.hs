@@ -155,11 +155,8 @@ renderVal x e = do
   pure (fst r)
 
 
-
 -- TODO coloured output for selection
--- TODO only render innermost selection (so use a version of curKey that looks at Local only, not Nested)
 -- TODO wrap Scren type + add basic local origin/enveloped composition operators (beside, above, etc)
--- TODO function to render a screen to a [[Char]] matrix of a specified with, padding with whitespace
 
 renderVal2
     :: Bool -- Allow moving left (i.e. not true for top node)
@@ -266,8 +263,6 @@ renderVal2 allowLeftMove (Val theValueMap) ev acc = do
         Nested n -> sendTo currentSubCompS e
         Local n -> doWithSelected Toggle n
 
-
-  -- TODO we also need to render our own keys and selection...
   let foo2 :: Signal Screen = do
         r :: Map String (Signal Screen) <- fmap (\m -> Map.map fst m) $ subCompsS
         s :: Sel <- selS
@@ -504,12 +499,12 @@ main = do
   putStrLn "Welcome! (ctrl-c to exit)"
   (cU, cE) <- newEvent
   app <- main' cE
-  void $ subscribeEvent (updates app) $ Sink $ \screenLines -> do
+  void $ subscribeEvent (updates app) $ Sink $ \screen -> do
     -- putStrLn "Hello!"
     -- clearScreen
+    let lines = renderScreen (80, 90) screen
     setCursorPosition 0 0
-    -- TODO pad lines to max lenght
-    forM_ screenLines (putStrLn . padTo 80)
+    forM_ lines putStrLn
     putStrLn "-----------" -- TODO pad bottom properly
   hSetEcho stdout False
 
@@ -524,7 +519,14 @@ main = do
     sendTo cU $ LetterKey c
 
   where
-    padTo n xs = take n $ xs ++ repeat ' '
+    renderScreen
+      :: (Int, Int) -- X,Y dimensions of viewport (i.e number of columns/rows)
+      -> Screen -- incoming
+      -> [[Char]]
+    renderScreen (width, height) xs = padWithTo (replicate width ' ') height $ fmap (padWithTo ' ' width) xs
+      where
+        padWithTo fillerElem n xs = take n $ xs ++ repeat fillerElem
+
 
 newSignal :: a -> FRP (Sink a, Signal a)
 newSignal z = do
