@@ -156,7 +156,6 @@ renderVal x e = do
 
 
 -- TODO coloured output for selection
--- TODO wrap Scren type + add basic local origin/enveloped composition operators (beside, above, etc)
 
 renderVal2
     :: Bool -- Allow moving left (i.e. not true for top node)
@@ -167,10 +166,11 @@ renderVal2
 renderVal2 allowLeftMove (Str x) ev _   = pure $ (pure [x], fmap (const ()) $ Lubeck.FRP.filter (== MoveRight) ev)
 renderVal2 allowLeftMove (Val theValueMap) ev acc = do
 
-  -- State:
-  --  selS      :: S ? determining current selection: in this tree, in the given subtree, or outside this element
-  --  toggledS  :: (Set String) which elements are toggled
+  -- STATE
   (selU, selS :: Signal Sel)                  <- newSignalA Outside
+  (subCompsU, subCompsS :: Signal (Map String (Signal Screen, Future ()))) <- newSignalA mempty
+
+  -- EVENT HANDLING
   let curKey :: Signal (Maybe String) = flip fmap selS  $ \s -> case s of
         Local n -> Just $ safeIndex (Map.keys theValueMap) n
         Nested n -> Just $ safeIndex (Map.keys theValueMap) n
@@ -178,7 +178,6 @@ renderVal2 allowLeftMove (Val theValueMap) ev acc = do
   let curLocalKey :: Signal (Maybe String) = flip fmap selS  $ \s -> case s of
         Local n -> Just $ safeIndex (Map.keys theValueMap) n
         _ -> Nothing
-  (subCompsU, subCompsS :: Signal (Map String (Signal Screen, Future ()))) <- newSignalA mempty
 
   -- TODO the joinE causes BAD performance degradations. Come up with something better.
   let subCompToldUs :: Events Int = joinE $ updates $ fmap (mconcat . zipWith (\n fut -> fmap (const n) fut) [0..] . fmap snd . toList) subCompsS
@@ -263,13 +262,14 @@ renderVal2 allowLeftMove (Val theValueMap) ev acc = do
         Nested n -> sendTo currentSubCompS e
         Local n -> doWithSelected Toggle n
 
-  let foo2 :: Signal Screen = do
+  -- RENDERING
+  let view :: Signal Screen = do
         r :: Map String (Signal Screen) <- fmap (\m -> Map.map fst m) $ subCompsS
         s :: Sel <- selS
         curKey' :: Maybe String <- curLocalKey
         let footer :: Signal Screen = mempty -- pure [show s]
-        mconcat $ Map.foldrWithKey (renderKeyWithValue curKey') [footer] $ useKeys theValueMap r -- TODO use useKeys
-  pure (foo2, superCompTold)
+        mconcat $ Map.foldrWithKey (renderKeyWithValue curKey') [footer] $ useKeys theValueMap r
+  pure (view, superCompTold)
   where
     renderKeyWithValue :: Maybe String -> String -> Maybe (Signal Screen) -> [Signal Screen] -> [Signal Screen]
     renderKeyWithValue curKey k Nothing  b = pure (renderKey curKey k) : fmap (moveScreenRight 2) (pure ["..."]) : b
@@ -287,149 +287,18 @@ renderVal2 allowLeftMove (Val theValueMap) ev acc = do
       g (Just _) = Nothing
     safeIndex xs n = xs !! (n `mod` length xs)
 
--- renderVal :: Value -> Events Action -> FRP (Signal Screen)
--- renderVal (Str x) _  = pure $ pure $ [x]
--- renderVal (Val m) ev = do
---   let selectedS :: Signal (Maybe String) = undefined
---   let openedS :: Signal (Set String) = undefined
---   -- subscribeEvent ev $ Sink $ \e -> case e of
---   --   MoveUp -> return ()
---   --     -- if something is selected, that thing is not opened and we can move up
---   --   MoveDown -> return ()
---   --   Collapse -> return ()
---   --   Decollapse -> return ()
---   (r :: Signal Screen) <- fmap apScreensM $ forM (Map.toList m) $ \(k,v) -> do
---     if Set.member k (undefined :: Set String) -- TODO
---       then
---         renderVal v ev
---       else
---         return $ collapsed
---
---   return undefined
---   where
---     apScreensM :: Applicative f => [f Screen] -> f Screen
---     apScreensM = fmap apScreens . sequenceA
---     apScreens :: [Screen] -> Screen
---     apScreens = foldr above mempty
---     collapsed :: Signal Screen
---     collapsed = pure ["..."]
-
-
-
--- subWidget l w = dimap w (set l) (view l)
-
--------TODO move
--- -- | Map over the HTML rendering of a widget.
--- mapHtmlWidget :: (r -> r2) -> WidgetT r a b -> WidgetT r2 a b
--- mapHtmlWidget f w = \s -> f . w s
--- -- TODO renamve mapView or similar
---
--- -- | Turn a widget of a smaller type into a widget of a larger type using a lens.
--- --
--- -- The resulting widget will render part of the larger type that the lens selects.
--- -- It the resulting widget produces output, this will be used to transform the
--- -- value rendered by the larger widget. This makes this function especially
--- -- useful in conjunction with 'multiWidget'.
--- --
--- -- @
--- -- subWidget _1     :: Widget' a -> Widget' (a, b)
--- -- subWidget (at 1) :: Widget' (Just a) -> Widget' (Map Int a)
--- -- @
--- subWidget :: Lens' s a -> Widget' a -> Widget' s
--- subWidget l w o i = w (contramapSink (\x -> set l x i) o) (view l i)
---
--- -- | Compose two widgets.
--- -- Both render the value and the resultant HTML is composed using the given function.
--- -- Output emitted by either widget is emitted by the resultant widget.
--- bothWidget :: (Html -> Html -> Html) -> Widget a b -> Widget a b -> Widget a b
--- bothWidget c w1 w2 o i = w1 o i `c` w2 o i
---
--- -- | Compose a widget out of several widgets of the same type.
--- -- Useful in conjunction with 'subWidget', as in
--- --
--- -- @
--- -- data Many = Many { _foo :: Int, _bar :: Maybe String }
--- -- makeLenses ''Many
--- --
--- -- manyW :: Widget Many Many
--- -- manyW = multiWidget (\x y -> div () [x,y])
--- --   [subWidget foo intW, subWidget bar (maybeW (div () ()) stringW)]
--- -- @
--- multiWidget :: Foldable t => (Html -> Html -> Html) -> t (Widget a b) -> Widget a b
--- multiWidget f = foldr1 (bothWidget f)
---
---
--- isoW :: Iso' a b -> Widget' a -> Widget' b
--- isoW i = dimapWidget (review i) (view i)
---
--- -- | Turn a widget of a part type into a widget of an alternative type using a prism.
--- --
--- -- The resulting widget will render the part of the value selected by the prism if it
--- -- is there, otherwise it renders the given default HTML. The default rendering can
--- -- optionally use the provided sink to initiate a new value (typically some kind of
--- -- default), in which case this value immediately replaces the previous value.
--- --
--- -- @
--- -- possW _Just :: Widget' a -> Widget' (Maybe a)
--- -- possW _Left :: Widget' a -> Widget' (Either a b)
--- -- @
--- possW :: (Sink a -> Html) -> Prism' s a -> Widget' a -> Widget' s
--- possW z p w o i = case preview p i of
---   Nothing -> z (contramapSink (review p) o)
---   Just x  -> w (contramapSink (review p) o) x
---
--- maybeW :: Html -> Widget' a -> Widget' (Maybe a)
--- maybeW z = possW (const z) Control.Lens._Just
---
--- mapMWidget :: ([Html] -> Html) -> Widget a a -> Widget [a] a
--- mapMWidget k w o is = k $ fmap (w o) is
-
--------
-
-
-
-
-
-
-
--- type Ship = Signal (String, V2 Int) -- name, pos
-
-
-
-
-{-
-
-
-
-
--}
 
 -- Like Show, drawing to a screen
 class ToScreen a where
   toScreen :: a -> Screen
 
 
-
-{-
-Note: can react to input but not anything else.
-We should provide a signal with time, and other stuff.
--}
--- main' :: Events Key -> FRP (Signal Screen)
--- main' e = do
---   stepperS ["abc", "def"] $ fmap (\(LetterKey c) -> (take 55 $ cycle $ [take 80 $ cycle "abc", "de"++[c]])) e
-
-
-
-
-
---
--- TODO library:
-
 data ArrowKey = Up | Down | Left | Right
 data Key      = ArrowKey ArrowKey | LetterKey Char
 
 
 {-
+
 A screen in a MxN matrix of characters
 With a local origin (TODO), which is conceptually at the BL corner of one char
 
@@ -443,6 +312,8 @@ I.e. if in these 2 sreens, the locl origin is a the BL corner of the upper-case 
   then, atop b a ==>
     abC
      xx
+
+TODO wrap Scren type + add basic local origin/enveloped composition operators (beside, above, etc)
 -}
 type Screen   = [[Char]] -- row-major order
 
@@ -454,8 +325,6 @@ above = (<>)
 
 
 {-
-
-
 empty :: Screen
 -- overlay screens, top-most character is rendered
 atop :: Screen -> Screen -> Screen
@@ -505,7 +374,6 @@ main = do
     let lines = renderScreen (80, 90) screen
     setCursorPosition 0 0
     forM_ lines putStrLn
-    putStrLn "-----------" -- TODO pad bottom properly
   hSetEcho stdout False
 
   hSetBuffering stdin NoBuffering
@@ -534,7 +402,6 @@ newSignal z = do
   s <- stepperS z e
   pure (u, s)
 
--- TODO move to Lubeck
 newSignalA :: a -> FRP (Sink (a -> a), Signal a)
 newSignalA z = do
   (u, e) <- newEvent
