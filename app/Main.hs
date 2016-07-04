@@ -155,7 +155,7 @@ renderVal2
     -> Events () -- accept selection
     -> FRP (Signal Screen, Future ())
 renderVal2 (Str x) ev _   = pure $ (pure [x], fmap (const ()) $ Lubeck.FRP.filter (== MoveRight) ev)
-renderVal2 (Val m) ev acc = do
+renderVal2 (Val theValueMap) ev acc = do
 
   -- TODO partial iso between strings and keys here
 
@@ -164,8 +164,8 @@ renderVal2 (Val m) ev acc = do
   --  toggledS  :: (Set String) which elements are toggled
   (selU, selS :: Signal Sel)                  <- newSignalA Outside
   let curKey :: Signal (Maybe String) = flip fmap selS  $ \s -> case s of
-        Local n -> Just $ safeIndex (Map.keys m) n
-        Nested n -> Just $ safeIndex (Map.keys m) n
+        Local n -> Just $ safeIndex (Map.keys theValueMap) n
+        Nested n -> Just $ safeIndex (Map.keys theValueMap) n
         _ -> Nothing
 
 
@@ -183,7 +183,7 @@ renderVal2 (Val m) ev acc = do
   (tellSubCompN  :: Sink Int, tellSubCompE) <- newEvent -- undefined
 
   let foo1 :: String -> Events Action = \n -> filterJust $ snapshotWith (\k v -> if k == Just n then Just v else Nothing) (current curKey) currentSubCompE
-  let foo2 :: String -> Events ()     = \k -> filterJust $ fmap (\n -> if safeIndex (Map.keys m) n == k then Just () else Nothing ) tellSubCompE
+  let foo2 :: String -> Events ()     = \k -> filterJust $ fmap (\n -> if safeIndex (Map.keys theValueMap) n == k then Just () else Nothing ) tellSubCompE
 
   (tellSuperComp :: Sink (), superCompTold :: Future ()) <- newEvent
 
@@ -229,8 +229,8 @@ renderVal2 (Val m) ev acc = do
         Outside -> return ()
         Nested n -> sendTo currentSubCompS e
         Local n -> do
-          let k = safeIndex (Map.keys m) n
-          case Map.lookup k m of
+          let k = safeIndex (Map.keys theValueMap) n
+          case Map.lookup k theValueMap of
             Nothing -> error "Impossible"
             Just nestedVal -> do
               let evs :: Events Action = foo1 k
@@ -244,10 +244,16 @@ renderVal2 (Val m) ev acc = do
   let foo2 :: Signal Screen = do
         r :: Map String (Signal Screen) <- fmap (\m -> Map.map fst m) $ subCompsS
         s :: Sel <- selS
-        mconcat $ Map.foldrWithKey (\k v (b::[Signal Screen]) -> pure [k] : fmap (moveScreenRight 2) v : b) [pure [show s]] $ r
+        mconcat $ Map.foldrWithKey g [pure [show s]] $ useKeys theValueMap r -- TODO use useKeys
   pure (foo2, superCompTold)
   where
-    -- useKeys = 
+    g :: String -> Maybe (Signal Screen) -> [Signal Screen] -> [Signal Screen]
+    g k Nothing  b = pure [k] : fmap (moveScreenRight 2) (pure ["..."]) : b
+    g k (Just v) b = pure [k] : fmap (moveScreenRight 2) v : b
+
+    -- Takes all the keys in first map and replaces with Just for keys that exist in the second map, Nothing for keys that doesnt
+    useKeys :: Ord k => Map k b -> Map k a -> Map k (Maybe a)
+    useKeys m1 m2 = Map.unionWith (\x y -> y) (fmap (const Nothing) m1) (fmap Just m2)
 
     mapToggle k v m = Map.alter g k m where
       g Nothing  = Just v
