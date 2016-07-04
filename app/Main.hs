@@ -170,8 +170,6 @@ renderVal2
 renderVal2 allowLeftMove (Str x) ev _   = pure $ (pure [x], fmap (const ()) $ Lubeck.FRP.filter (== MoveRight) ev)
 renderVal2 allowLeftMove (Val theValueMap) ev acc = do
 
-  -- TODO partial iso between strings and keys here
-
   -- State:
   --  selS      :: S ? determining current selection: in this tree, in the given subtree, or outside this element
   --  toggledS  :: (Set String) which elements are toggled
@@ -183,16 +181,9 @@ renderVal2 allowLeftMove (Val theValueMap) ev acc = do
   let curLocalKey :: Signal (Maybe String) = flip fmap selS  $ \s -> case s of
         Local n -> Just $ safeIndex (Map.keys theValueMap) n
         _ -> Nothing
-
-
-  -- NOTE this would be redunant if we actually removed subcomponents from map below
-  -- (toggledU, toggledS :: Signal (Set String)) <- newSignalA mempty
-
-  -- TODO subcomponents, created on demand
   (subCompsU, subCompsS :: Signal (Map String (Signal Screen, Future ()))) <- newSignalA mempty
 
-
-
+  -- TODO the joinE causes BAD performance degradations. Come up with something better.
   let subCompToldUs :: Events Int = joinE $ updates $ fmap (mconcat . zipWith (\n fut -> fmap (const n) fut) [0..] . fmap snd . toList) subCompsS
 
   (currentSubCompS :: Sink Action, currentSubCompE) <- newEvent -- undefined
