@@ -149,6 +149,14 @@ renderVal x e = do
   sendTo u ()
   pure (fst r)
 
+
+
+-- TODO prevent going where you're not supposed to (i.e. messing up selection state)
+-- TODO coloured output for selection
+-- TODO only render innermost selection (so use a version of curKey that looks at Local only, not Nested)
+-- TODO wrap Scren type + add basic local origin/enveloped composition operators (beside, above, etc)
+-- TODO function to render a screen to a [[Char]] matrix of a specified with, padding with whitespace
+
 renderVal2
     :: Value
     -> Events Action
