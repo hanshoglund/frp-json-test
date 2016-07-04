@@ -244,12 +244,17 @@ renderVal2 (Val theValueMap) ev acc = do
   let foo2 :: Signal Screen = do
         r :: Map String (Signal Screen) <- fmap (\m -> Map.map fst m) $ subCompsS
         s :: Sel <- selS
-        mconcat $ Map.foldrWithKey g [pure [show s]] $ useKeys theValueMap r -- TODO use useKeys
+        curKey :: Maybe String <- curKey
+        let footer :: Signal Screen = mempty -- pure [show s]
+        mconcat $ Map.foldrWithKey (renderKeyWithValue curKey) [footer] $ useKeys theValueMap r -- TODO use useKeys
   pure (foo2, superCompTold)
   where
-    g :: String -> Maybe (Signal Screen) -> [Signal Screen] -> [Signal Screen]
-    g k Nothing  b = pure [k] : fmap (moveScreenRight 2) (pure ["..."]) : b
-    g k (Just v) b = pure [k] : fmap (moveScreenRight 2) v : b
+    renderKeyWithValue :: Maybe String -> String -> Maybe (Signal Screen) -> [Signal Screen] -> [Signal Screen]
+    renderKeyWithValue curKey k Nothing  b = pure (renderKey curKey k) : fmap (moveScreenRight 2) (pure ["..."]) : b
+    renderKeyWithValue curKey k (Just v) b = pure (renderKey curKey k) : fmap (moveScreenRight 2) v : b
+
+    renderKey :: Maybe String -> String -> Screen
+    renderKey curKey k = [k ++ if curKey == Just k then "*" else ""]
 
     -- Takes all the keys in first map and replaces with Just for keys that exist in the second map, Nothing for keys that doesnt
     useKeys :: Ord k => Map k b -> Map k a -> Map k (Maybe a)
