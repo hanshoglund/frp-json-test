@@ -218,18 +218,18 @@ renderVal2 allowLeftMove (Val theValueMap) ev acc = do
       Nested n -> sendTo selU (const $ Local n)
       _ -> return ()
   subscribeEvent ev $ Sink $ \e -> case e of
-    MoveUp -> do
+    MoveUp  -> do
       s <- pollBehavior $ current selS
       case s of
         Outside -> return ()
         Nested n -> sendTo currentSubCompS e
-        Local n -> sendTo selU (const $ Local (n-1))
+        Local n -> sendTo selU (const $ Local (n - 1))
     MoveDown -> do
       s <- pollBehavior $ current selS
       case s of
         Outside -> return ()
         Nested n -> sendTo currentSubCompS e
-        Local n -> sendTo selU (const $ Local (n+1))
+        Local n -> sendTo selU (const $ Local (n + 1))
     MoveLeft -> do
       s <- pollBehavior $ current selS
       case s of
