@@ -376,8 +376,9 @@ main = do
   (cU, cE) <- newEvent
   app <- explorerApp cE
   void $ subscribeEvent (updates app) $ Sink $ \screen -> do
-    -- putStrLn "Hello!"
-    -- clearScreen
+
+    -- TODO get terminal size through https://hackage.haskell.org/package/terminal-size
+    -- Or go full ncurses (what's the difference in portability?)
     let lines = renderScreen (80, 60) screen
     setCursorPosition 0 0
     forM_ lines putStrLn
