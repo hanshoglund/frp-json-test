@@ -132,8 +132,15 @@ data Sel = Outside | Local Int | Nested Int
 data ToggleCommand = Open | Close | Toggle
   deriving (Eq, Ord, Show)
 
-main' :: Events Key -> FRP (Signal Screen)
-main' e = do
+
+counterApp :: Events Key -> FRP (Signal Screen)
+counterApp e = do
+  countS <- accumS 0 (fmap (const succ) e)
+  pure $ fmap (\n -> replicate n ("x")) countS
+
+
+explorerApp :: Events Key -> FRP (Signal Screen)
+explorerApp e = do
   renderVal exValue2 (filterJust $ fmap g e)
   where
     g (LetterKey '\r') = Just ToggleSelected
@@ -367,11 +374,11 @@ main = do
   setCursorPosition 0 0
   putStrLn "Welcome! (ctrl-c to exit)"
   (cU, cE) <- newEvent
-  app <- main' cE
+  app <- explorerApp cE
   void $ subscribeEvent (updates app) $ Sink $ \screen -> do
     -- putStrLn "Hello!"
     -- clearScreen
-    let lines = renderScreen (80, 90) screen
+    let lines = renderScreen (80, 60) screen
     setCursorPosition 0 0
     forM_ lines putStrLn
   hSetEcho stdout False
@@ -391,7 +398,7 @@ main = do
       :: (Int, Int) -- X,Y dimensions of viewport (i.e number of columns/rows)
       -> Screen -- incoming
       -> [[Char]]
-    renderScreen (width, height) xs = padWithTo (replicate width ' ') height $ fmap (padWithTo ' ' width) xs
+    renderScreen (width, height) xs = padWithTo (replicate width '+') height $ fmap (padWithTo ' ' width) xs
       where
         padWithTo fillerElem n xs = take n $ xs ++ repeat fillerElem
 
