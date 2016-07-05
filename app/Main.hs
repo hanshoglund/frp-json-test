@@ -136,7 +136,7 @@ data ToggleCommand = Open | Close | Toggle
 counterApp :: Events Key -> FRP (Signal Screen)
 counterApp e = do
   countS <- accumS 0 (fmap (const succ) e)
-  pure $ fmap (\n -> replicate n ("x")) countS
+  pure $ fmap (\n -> screenFromList $ replicate n "x") countS
 
 
 explorerApp :: Events Key -> FRP (Signal Screen)
@@ -170,7 +170,7 @@ renderVal2
     -> Events Action
     -> Events () -- accept selection
     -> FRP (Signal Screen, Future ())
-renderVal2 allowLeftMove (Str x) ev _   = pure $ (pure [x], fmap (const ()) $ Lubeck.FRP.filter (== MoveRight) ev)
+renderVal2 allowLeftMove (Str x) ev _   = pure $ (pure (screenFromList [x]), fmap (const ()) $ Lubeck.FRP.filter (== MoveRight) ev)
 renderVal2 allowLeftMove (Val theValueMap) ev acc = do
 
   -- STATE
@@ -274,16 +274,16 @@ renderVal2 allowLeftMove (Val theValueMap) ev acc = do
         r :: Map String (Signal Screen) <- fmap (\m -> Map.map fst m) $ subCompsS
         s :: Sel <- selS
         curKey' :: Maybe String <- curLocalKey
-        let footer :: Signal Screen = mempty -- pure [show s]
-        mconcat $ Map.foldrWithKey (renderKeyWithValue curKey') [footer] $ useKeys theValueMap r
+        let footer :: Signal Screen = pure emptyScreen -- pure [show s]
+        fmap catScreensV $ sequenceA $ Map.foldrWithKey (renderKeyWithValue curKey') [footer] $ useKeys theValueMap r
   pure (view, superCompTold)
   where
     renderKeyWithValue :: Maybe String -> String -> Maybe (Signal Screen) -> [Signal Screen] -> [Signal Screen]
-    renderKeyWithValue curKey k Nothing  b = pure (renderKey curKey k) : fmap (moveScreenRight 2) (pure ["..."]) : b
+    renderKeyWithValue curKey k Nothing  b = pure (renderKey curKey k) : fmap (moveScreenRight 2) (pure $ screenFromList ["..."]) : b
     renderKeyWithValue curKey k (Just v) b = pure (renderKey curKey k) : fmap (moveScreenRight 2) v : b
 
     renderKey :: Maybe String -> String -> Screen
-    renderKey curKey k = [k ++ if curKey == Just k then "*" else ""]
+    renderKey curKey k = screenFromList [k ++ if curKey == Just k then "*" else ""]
 
     -- Takes all the keys in first map and replaces with Just for keys that exist in the second map, Nothing for keys that doesnt
     useKeys :: Ord k => Map k b -> Map k a -> Map k (Maybe a)
@@ -322,13 +322,31 @@ I.e. if in these 2 sreens, the locl origin is a the BL corner of the upper-case 
 
 TODO wrap Scren type + add basic local origin/enveloped composition operators (beside, above, etc)
 -}
-type Screen   = [[Char]] -- row-major order
+newtype Screen   = Screen_ [[Char]] -- row-major order
+
+emptyScreen = Screen_ mempty
+
+{-
+Make a screen from a list of rows.
+Dimensions are given by the maximum number of rows and columns, and the local origin is at TL corner.
+-}
+screenFromList :: [String] -> Screen
+screenFromList = Screen_
+
+{-
+Put screens on top of one another (top-to-bottom).
+Preserves local origin of first screen.
+-}
+catScreensV :: [Screen] -> Screen
+catScreensV xs = Screen_ $ mconcat $ fmap getScreen xs
+  where
+    getScreen (Screen_ x) = x
 
 moveScreenRight :: Int -> Screen -> Screen
-moveScreenRight n sc = fmap (replicate n ' ' ++) sc
+moveScreenRight n (Screen_ sc) = Screen_ $ fmap (replicate n ' ' ++) $ sc
 
-above :: Screen -> Screen -> Screen
-above = (<>)
+-- above :: Screen -> Screen -> Screen
+-- above = (<>)
 
 
 {-
@@ -399,7 +417,7 @@ main = do
       :: (Int, Int) -- X,Y dimensions of viewport (i.e number of columns/rows)
       -> Screen -- incoming
       -> [[Char]]
-    renderScreen (width, height) xs = padWithTo (replicate width '+') height $ fmap (padWithTo ' ' width) xs
+    renderScreen (width, height) (Screen_ xs) = padWithTo (replicate width '+') height $ fmap (padWithTo ' ' width) xs
       where
         padWithTo fillerElem n xs = take n $ xs ++ repeat fillerElem
 
