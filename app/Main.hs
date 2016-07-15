@@ -151,10 +151,10 @@ explorerApp e = do
     g (LetterKey 'a') = Just MoveLeft
     g _ = Nothing
 
-renderVal
-    :: Value
-    -> Events Action
-    -> FRP (Signal Screen)
+
+renderVal                       :: Value
+                                -> Events Action
+                                -> FRP (Signal Screen)
 renderVal x e = do
   (u,e2) <- newEvent
   r <- renderVal2 False x e e2
@@ -164,20 +164,27 @@ renderVal x e = do
 
 -- TODO coloured output for selection
 
-renderVal2
-    :: Bool -- Allow moving left (i.e. not true for top node)
-    -> Value
-    -> Events Action
-    -> Events () -- accept selection
-    -> FRP (Signal Screen, Future ())
-renderVal2 allowLeftMove (Str x) ev _   = pure $ (pure (screenFromList [x]), fmap (const ()) $ Lubeck.FRP.filter (== MoveRight) ev)
+renderVal2                    :: Bool
+                              -- ^ Allow moving left (i.e. not true for top node)
+                              -> Value
+                              -> Events Action
+                              -> Events ()
+                              -- ^ Accept selection
+                              -> FRP (Signal Screen, Future ())
+renderVal2 allowLeftMove (Str x) ev _             =
+  pure $ (pure $ screenFromList [x], fmap (const ()) $ Lubeck.FRP.filter (== MoveRight) ev)
 renderVal2 allowLeftMove (Val theValueMap) ev acc = do
 
+  -- --------------------------------------------------------------------------------
   -- STATE
-  (selU, selS :: Signal Sel)                  <- newSignalA Outside
+  (selU,      selS      :: Signal Sel)                                     <- newSignalA Outside
   (subCompsU, subCompsS :: Signal (Map String (Signal Screen, Future ()))) <- newSignalA mempty
 
+  -- --------------------------------------------------------------------------------
   -- EVENT HANDLING
+  (currentSubCompS :: Sink Action, currentSubCompE) <- newEvent -- undefined
+  (tellSubCompN  :: Sink Int,      tellSubCompE)    <- newEvent -- undefined
+
   let curKey :: Signal (Maybe String) = flip fmap selS  $ \s -> case s of
         Local n -> Just $ safeIndex (Map.keys theValueMap) n
         Nested n -> Just $ safeIndex (Map.keys theValueMap) n
@@ -188,9 +195,6 @@ renderVal2 allowLeftMove (Val theValueMap) ev acc = do
 
   -- TODO the joinE causes BAD performance degradations. Come up with something better.
   let subCompToldUs :: Events Int = joinE $ updates $ fmap (mconcat . zipWith (\n fut -> fmap (const n) fut) [0..] . fmap snd . toList) subCompsS
-
-  (currentSubCompS :: Sink Action, currentSubCompE) <- newEvent -- undefined
-  (tellSubCompN  :: Sink Int, tellSubCompE) <- newEvent -- undefined
 
   let foo1 :: String -> Events Action = \n -> filterJust $ snapshotWith (\k v -> if k == Just n then Just v else Nothing) (current curKey) currentSubCompE
   let foo2 :: String -> Events ()     = \k -> filterJust $ fmap (\n -> if safeIndex (Map.keys theValueMap) n == k then Just () else Nothing ) tellSubCompE
@@ -269,7 +273,9 @@ renderVal2 allowLeftMove (Val theValueMap) ev acc = do
         Nested n -> sendTo currentSubCompS e
         Local n -> doWithSelected Toggle n
 
+  -- --------------------------------------------------------------------------------
   -- RENDERING
+
   let view :: Signal Screen = do
         r :: Map String (Signal Screen) <- fmap (\m -> Map.map fst m) $ subCompsS
         s :: Sel <- selS
@@ -277,7 +283,9 @@ renderVal2 allowLeftMove (Val theValueMap) ev acc = do
         let footer :: Signal Screen = pure emptyScreen -- pure [show s]
         fmap catScreensV $ sequenceA $ Map.foldrWithKey (renderKeyWithValue curKey') [footer] $ useKeys theValueMap r
   pure (view, superCompTold)
+
   where
+
     renderKeyWithValue :: Maybe String -> String -> Maybe (Signal Screen) -> [Signal Screen] -> [Signal Screen]
     renderKeyWithValue curKey k Nothing  b = pure (renderKey curKey k) : fmap (moveScreenRight 2) (pure $ screenFromList ["..."]) : b
     renderKeyWithValue curKey k (Just v) b = pure (renderKey curKey k) : fmap (moveScreenRight 2) v : b
